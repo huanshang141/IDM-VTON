@@ -41,6 +41,8 @@ import shutil
 import time
 import requests
 import json
+import base64
+import io
 
 # 添加服务器配置
 SERVER_URL = "http://localhost:8080"  # 根据实际情况修改服务器地址
@@ -896,6 +898,89 @@ body {
 
 """
 
+def image_to_base64(image):
+    """将PIL图像转换为base64字符串"""
+    if image is None:
+        return None
+    
+    buffer = io.BytesIO()
+    image.save(buffer, format='PNG')
+    img_str = base64.b64encode(buffer.getvalue()).decode()
+    return f"data:image/png;base64,{img_str}"
+
+def base64_to_image(base64_str):
+    """将base64字符串转换为PIL图像"""
+    if not base64_str:
+        return None
+    
+    # 移除data:image/...;base64,前缀
+    if base64_str.startswith('data:image'):
+        base64_str = base64_str.split(',')[1]
+    
+    image_data = base64.b64decode(base64_str)
+    image = Image.open(io.BytesIO(image_data))
+    return image
+
+def api_tryon(
+    human_image_base64: str,
+    garment_image_base64: str,
+    garment_description: str = "a shirt",
+    auto_mask: bool = True,
+    auto_crop: bool = False,
+    denoise_steps: int = 25,
+    seed: int = 42
+) -> tuple[str, str]:
+    """
+    API版本的试穿函数
+    
+    参数:
+        human_image_base64: 人物图片的base64编码字符串
+        garment_image_base64: 服装图片的base64编码字符串
+        garment_description: 服装描述
+        auto_mask: 是否自动生成遮罩
+        auto_crop: 是否自动裁剪
+        denoise_steps: 去噪步骤数
+        seed: 随机种子
+    
+    返回:
+        tuple: (试穿结果图片base64, 遮罩图片base64)
+    """
+    try:
+        # 转换base64为PIL图像
+        human_img = base64_to_image(human_image_base64)
+        garment_img = base64_to_image(garment_image_base64)
+        
+        if human_img is None or garment_img is None:
+            raise ValueError("无效的图片数据")
+        
+        # 构造start_tryon函数需要的dict格式
+        human_dict = {
+            "background": human_img,
+            "layers": [Image.new('RGB', human_img.size, (255, 255, 255))],  # 创建空白遮罩层
+            "composite": None
+        }
+        
+        # 调用原始的试穿函数
+        result_img, mask_img = start_tryon(
+            dict=human_dict,
+            garm_img=garment_img,
+            garment_des=garment_description,
+            is_checked=auto_mask,
+            is_checked_crop=auto_crop,
+            denoise_steps=denoise_steps,
+            seed=seed
+        )
+        
+        # 转换结果为base64
+        result_base64 = image_to_base64(result_img)
+        mask_base64 = image_to_base64(mask_img)
+        
+        return result_base64, mask_base64
+        
+    except Exception as e:
+        print(f"API试穿失败: {str(e)}")
+        raise Exception(f"试穿处理失败: {str(e)}")
+
 with gr.Blocks(css=custom_css) as demo:
     gr.HTML('<div id="global-bg-img"></div>')
     page_state = gr.State("home")
@@ -1075,6 +1160,9 @@ with gr.Blocks(css=custom_css) as demo:
         del_btn = gr.Button("删除选中图片", elem_id="del-btn")
         gr.Markdown("点击图片后点击下方"'删除'"按钮即可删除")
         back_btn_fav = gr.Button("返回首页", elem_id="back-btn-fav")
+
+    # 注册API端点
+    gr.api(api_tryon, api_name="tryon")
 
     # 页面切换函数
     def switch_page(page):
@@ -1371,4 +1459,4 @@ with gr.Blocks(css=custom_css) as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(show_api=False, share=False, allowed_paths=allowed_paths)
+    demo.launch(show_api=True, share=False, allowed_paths=allowed_paths)
