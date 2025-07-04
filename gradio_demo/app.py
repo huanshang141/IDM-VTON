@@ -54,7 +54,7 @@ def pil_to_binary_mask(pil_image, threshold=0):
 
 # 已经下载好了
 # 首次下载为'yisol/IDM-VTON'
-base_path = '/root/autodl-tmp/cache/hub/models--yisol--IDM-VTON/snapshots/585a32e74aee241cbc0d0cc3ab21392ca58c916a'
+base_path = 'D:/Work/IDM_VTON/cache'
 example_path = os.path.join(os.path.dirname(__file__), 'example')
 
 unet = UNet2DConditionModel.from_pretrained(

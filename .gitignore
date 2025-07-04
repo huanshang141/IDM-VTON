@@ -12,3 +12,6 @@ htmlcov/
 /ckpt/**
 /ckpt/**/
 ckpt/
+
+
+**.zip
